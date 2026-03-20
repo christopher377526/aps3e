@@ -2,6 +2,10 @@ name: Android CI Bionic
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ "main2" ]
+  pull_request:
+    branches: [ "main2" ]
 
 jobs:
   build:
@@ -23,11 +27,30 @@ jobs:
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
+      
     - name: Build with Gradle
       run: ./gradlew assembleDebug
-
-    - name: Attach release in action
+      
+    - name: Debug - Find APK location
+      run: |
+        echo "=== Searching for APK files ==="
+        find . -name "*.apk" -type f
+        echo "=== Checking app directory ==="
+        ls -la app/build/outputs/ || echo "app/build/outputs not found"
+        ls -la app/build/outputs/apk/ || echo "apk folder not found"
+        
+    - name: Upload APK - Option 1 (if in debug)
+      if: success()
       uses: actions/upload-artifact@v4
       with:
-       name: aps3e
-       path: ./app/build/outputs/apk/debug/app-debug.apk
+        name: aps3e-debug
+        path: app/build/outputs/apk/debug/*.apk
+        if-no-files-found: warn
+        
+    - name: Upload APK - Option 2 (search all)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: aps3e-all-apks
+        path: "**/*.apk"
+        if-no-files-found: warn
