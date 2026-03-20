@@ -1,4 +1,4 @@
-name: Universal Build - aps3e
+name: Android CI - aps3e
 
 on:
   push:
@@ -12,59 +12,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    - name: Detect build system
-      id: detect
-      run: |
-        if [ -f "gradlew" ]; then
-          echo "system=gradle" >> $GITHUB_OUTPUT
-        elif [ -f "CMakeLists.txt" ]; then
-          echo "system=cmake" >> $GITHUB_OUTPUT
-        elif [ -f "Makefile" ]; then
-          echo "system=make" >> $GITHUB_OUTPUT
-        else
-          echo "system=unknown" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Setup Java (if Gradle)
-      if: steps.detect.outputs.system == 'gradle'
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
+        cache: gradle
 
-    - name: Build with Gradle
-      if: steps.detect.outputs.system == 'gradle'
-      run: |
-        chmod +x gradlew
-        ./gradlew build
-
-    - name: Install dependencies (if C++)
-      if: steps.detect.outputs.system == 'cmake' || steps.detect.outputs.system == 'make'
+    - name: Install CMake and dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl1-mesa-dev libglu1-mesa-dev
+        sudo apt-get install -y cmake ninja-build
 
-    - name: Build with CMake
-      if: steps.detect.outputs.system == 'cmake'
+    - name: Grant execute permission
+      run: chmod +x gradlew
+
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug
+
+    - name: Find APK location
+      id: find_apk
       run: |
-        mkdir -p build && cd build
-        cmake .. && make -j$(nproc)
+        APK_PATH=$(find . -name "*.apk" -type f | head -n 1)
+        echo "APK found at: $APK_PATH"
+        echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
 
-    - name: Build with Make
-      if: steps.detect.outputs.system == 'make'
-      run: |
-        make -j$(nproc)
-
-    - name: Upload artifacts
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: aps3e-build
-        path: |
-          **/*.apk
-          **/*.so
-          **/bin/
-          build/
+        name: aps3e-${{ github.sha }}
+        path: ${{ steps.find_apk.outputs.apk_path }}
